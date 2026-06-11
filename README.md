@@ -1,5 +1,7 @@
 **English** | [Español](./README.es.md)
 
+[![CI](https://github.com/IgarzaTech/bridle/actions/workflows/ci.yml/badge.svg)](https://github.com/IgarzaTech/bridle/actions/workflows/ci.yml)
+
 # @igarzatech/bridle
 
 **The budget that actually blocks.** Per-agent spend guardrail for agentic payments —

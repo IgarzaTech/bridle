@@ -1,5 +1,7 @@
 [English](./README.md) | **Español**
 
+[![CI](https://github.com/IgarzaTech/bridle/actions/workflows/ci.yml/badge.svg)](https://github.com/IgarzaTech/bridle/actions/workflows/ci.yml)
+
 # @igarzatech/bridle
 
 **El presupuesto que bloquea de verdad.** Guardrail de gasto por agente para pagos
