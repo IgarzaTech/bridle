@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    # Postgres real para el test de concurrencia (la garantía central: "el presupuesto
+    # bloquea de verdad"). GitHub setea CI=true, así que sin DB el gate del test FALLA.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: nexopay
+          POSTGRES_PASSWORD: nexopay
+          POSTGRES_DB: nexopay_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nexopay"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (paquete)
+        run: pnpm run build
+
+      - name: Lint (paquete)
+        run: pnpm run lint
+
+      - name: Lint (example)
+        run: pnpm run lint:example
+
+      - name: Typecheck (example)
+        run: pnpm run build:example
+
+      - name: Test (incluye concurrencia contra Postgres real)
+        run: pnpm test
+        env:
+          DATABASE_HOST: localhost
+          DATABASE_PORT: 5432
+          DATABASE_USER: nexopay
+          DATABASE_PASSWORD: nexopay
+          DATABASE_NAME: nexopay_test

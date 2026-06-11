@@ -1,0 +1,25 @@
+{
+  "name": "@nexopay/bridle-example",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Demo de @nexopay/bridle (artefacto de referencia — NO se publica). Dogfoodea la API pública del paquete.",
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint \"*.ts\"",
+    "test": "echo \"no tests in example\"",
+    "clean": "echo \"nothing to clean\"",
+    "demo": "ts-node --transpile-only -P tsconfig.run.json demo.ts"
+  },
+  "dependencies": {
+    "@nexopay/bridle": "workspace:*",
+    "viem": "^2.52.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4"
+  }
+}
