@@ -10,7 +10,7 @@ framework-agnostic, storage-pluggable, x402-ready.
 Bridle sits in front of a payment attempt: it **reserves** the budget before paying,
 **commits** on settlement, and **releases** if the payment fails or expires. Under real
 concurrency it guarantees an agent never exceeds its limit (validated by a concurrency
-test against Postgres that ships with the package).
+test against real Postgres that runs in CI).
 
 - License: **Apache-2.0**
 - Node: **20.x**
@@ -19,6 +19,10 @@ test against Postgres that ships with the package).
 ---
 
 ## Quickstart (2 minutes)
+
+> **Want to see it run?** [`examples/`](./examples) has a 2-minute demo — a budget that lets
+> one payment through and blocks the next — in `mock` mode (zero setup) or against real Tempo
+> testnet.
 
 ```bash
 pnpm add @igarzatech/bridle pg
@@ -78,8 +82,9 @@ guardrail does NOT block** — two concurrent reservations would read the same t
 both pass (overcommit). The Postgres adapter implements it with `pg_advisory_xact_lock`,
 which serializes even when the agent has no budget row.
 
-If you implement your own Storage adapter, **it must pass the concurrency test** that
-ships with the package. It is not optional: it is the central guarantee.
+If you implement your own Storage adapter, **it must satisfy the same concurrency
+guarantee** — the repo's concurrency test (run in CI against real Postgres) shows what
+that means. It is not optional: it is the central guarantee.
 
 ### Writing per-agent policies
 
@@ -127,8 +132,9 @@ stop(); // when you shut the process down
 
 ### Identity / anti-DoS (optional)
 
-The budget is tracked against a declared `agentAddress`. So an attacker cannot drain a
-victim's budget by declaring their address, authenticate the identity before reserving.
+The budget is tracked against a declared `agentAddress`. By itself, that means an attacker
+could drain a victim's budget just by declaring the victim's address — so authenticate the
+identity (verify a signature) before reserving.
 This feature **requires** that you pass a `signatureVerifier` when building the guard
 (otherwise `verifyAndConsumeNonce` throws `ConfigurationError`):
 

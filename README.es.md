@@ -10,7 +10,7 @@ agénticos — framework-agnóstico, storage-pluggable, listo para x402.
 Bridle se sienta delante de un intento de pago: **reserva** el presupuesto antes de
 pagar, **confirma** al liquidar y **libera** si el pago falla o expira. Bajo
 concurrencia real, garantiza que un agente nunca se pase de su límite (validado con un
-test de concurrencia contra Postgres que viaja con el paquete).
+test de concurrencia contra Postgres real que corre en CI).
 
 - Licencia: **Apache-2.0**
 - Node: **20.x**
@@ -19,6 +19,10 @@ test de concurrencia contra Postgres que viaja con el paquete).
 ---
 
 ## Quickstart (2 minutos)
+
+> **¿Quieres verlo correr?** [`examples/`](./examples) tiene un demo de 2 minutos — un
+> presupuesto que deja pasar un pago y bloquea el siguiente — en modo `mock` (cero setup) o
+> contra la testnet real de Tempo.
 
 ```bash
 pnpm add @igarzatech/bridle pg
@@ -78,8 +82,9 @@ bloquea** — dos reservas concurrentes leerían el mismo total y ambas pasaría
 (overcommit). El adapter Postgres lo implementa con `pg_advisory_xact_lock`, que
 serializa incluso cuando el agente no tiene fila de presupuesto.
 
-Si implementas tu propio adapter de Storage, **debe pasar el test de concurrencia** que
-viaja con el paquete. No es opcional: es la garantía central.
+Si implementas tu propio adapter de Storage, **debe cumplir la misma garantía de
+concurrencia** — el test de concurrencia del repo (corre en CI contra Postgres real)
+muestra qué significa. No es opcional: es la garantía central.
 
 ### Escribir políticas por agente
 
@@ -127,10 +132,11 @@ stop(); // cuando cierres el proceso
 
 ### Identidad / anti-DoS (opcional)
 
-El presupuesto se trackea contra una `agentAddress` declarada. Para que un atacante no
-agote el presupuesto de una víctima declarando su address, autentica la identidad antes
-de reservar. Esta feature **requiere** que pases un `signatureVerifier` al construir el
-guard (si no, `verifyAndConsumeNonce` lanza `ConfigurationError`):
+El presupuesto se trackea contra una `agentAddress` declarada. Por sí solo, eso significa
+que un atacante podría agotar el presupuesto de una víctima con solo declarar la address de
+la víctima — así que autentica la identidad (verifica una firma) antes de reservar. Esta
+feature **requiere** que pases un `signatureVerifier` al construir el guard (si no,
+`verifyAndConsumeNonce` lanza `ConfigurationError`):
 
 ```ts
 import { BridleGuard, Secp256k1SignatureVerifier } from '@igarzatech/bridle';
