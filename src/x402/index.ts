@@ -1,5 +1,5 @@
 /**
- * `@nexopay/bridle/x402` — enganche del guardrail delante de un intento de pago.
+ * `@igarzatech/bridle/x402` — enganche del guardrail delante de un intento de pago.
  *
  * NO reimplementa x402. Es un wrapper agnóstico de framework: reserva presupuesto
  * ANTES de pagar, hace commit al liquidar y release si el pago falla. El rail de

@@ -1,86 +1,88 @@
-# @nexopay/bridle
+**English** | [Español](./README.es.md)
 
-**El presupuesto que bloquea de verdad.** Guardrail de gasto por agente para pagos
-agénticos — framework-agnóstico, storage-pluggable, listo para x402.
+# @igarzatech/bridle
 
-Bridle se sienta delante de un intento de pago: **reserva** el presupuesto antes de
-pagar, **confirma** al liquidar y **libera** si el pago falla o expira. Bajo
-concurrencia real, garantiza que un agente nunca se pase de su límite (validado con un
-test de concurrencia contra Postgres que viaja con el paquete).
+**The budget that actually blocks.** Per-agent spend guardrail for agentic payments —
+framework-agnostic, storage-pluggable, x402-ready.
 
-- Licencia: **Apache-2.0**
+Bridle sits in front of a payment attempt: it **reserves** the budget before paying,
+**commits** on settlement, and **releases** if the payment fails or expires. Under real
+concurrency it guarantees an agent never exceeds its limit (validated by a concurrency
+test against Postgres that ships with the package).
+
+- License: **Apache-2.0**
 - Node: **20.x**
-- Sin custodia, sin mover fondos: Bridle solo cuenta y decide.
+- Non-custodial, never moves funds: Bridle only counts and decides.
 
 ---
 
-## Quickstart (2 minutos)
+## Quickstart (2 minutes)
 
 ```bash
-pnpm add @nexopay/bridle pg
+pnpm add @igarzatech/bridle pg
 ```
 
 ```ts
-import { BridleGuard } from '@nexopay/bridle';
-import { PostgresStorageAdapter } from '@nexopay/bridle/postgres';
-import { withBudget } from '@nexopay/bridle/x402';
+import { BridleGuard } from '@igarzatech/bridle';
+import { PostgresStorageAdapter } from '@igarzatech/bridle/postgres';
+import { withBudget } from '@igarzatech/bridle/x402';
 import { Pool } from 'pg';
 
-// 1. Storage: tú traes el Pool de Postgres (Bridle no lo crea).
+// 1. Storage: you bring the Postgres Pool (Bridle does not create it).
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const storage = new PostgresStorageAdapter(pool, { tablePrefix: 'bridle_' });
-await storage.migrate(); // crea agent_budgets / budget_ledger / used_nonces
+await storage.migrate(); // creates agent_budgets / budget_ledger / used_nonces
 
-// 2. Guard: fail-safe — sin política ni default, DENIEGA (nunca permite a ciegas).
-//    El `signatureVerifier` es OPCIONAL: solo lo necesitas para identidad/anti-DoS
-//    (verifyAndConsumeNonce). Para el presupuesto puro no pasas verifier.
+// 2. Guard: fail-safe — with no policy and no default, it DENIES (never allows blindly).
+//    The `signatureVerifier` is OPTIONAL: you only need it for identity/anti-DoS
+//    (verifyAndConsumeNonce). For budget-only you pass no verifier.
 const guard = new BridleGuard({
   storage,
   config: {
-    // presupuesto por defecto para agentes sin fila propia: $1.00 por día
+    // default budget for agents without their own row: $1.00 per day
     defaultBudget: { maxAmountPerWindow: '1.00', windowDurationSeconds: 86_400 },
   },
 });
 
-// 3. Envuelve la llamada de pago. El primer dólar pasa…
+// 3. Wrap the payment call. The first dollar goes through…
 const agentAddress = '0xabc...';
 async function pay(reservationId: string): Promise<string> {
   return withBudget(
     guard,
     { reservationId, agentAddress, amount: '1.00', currency: 'USDC' },
     async () => {
-      // aquí va TU pago real (x402 / MPP / Tempo / lo que sea). Bridle no lo conoce.
+      // your real payment goes here (x402 / MPP / Tempo / whatever). Bridle doesn't know it.
       return 'paid';
     },
   );
 }
 
-await pay('r1'); // ✅ reserva, paga, commit
-await pay('r2'); // ❌ throw BudgetExceededError — el presupuesto BLOQUEA de verdad
+await pay('r1'); // ✅ reserves, pays, commits
+await pay('r2'); // ❌ throws BudgetExceededError — the budget actually BLOCKS
 ```
 
-Eso es todo: el segundo pago se rechaza con `BudgetExceededError` (HTTP 429 si usas el
-adapter Express) porque el agente ya gastó su dólar de la ventana.
+That's it: the second payment is rejected with `BudgetExceededError` (HTTP 429 if you use
+the Express adapter) because the agent already spent its dollar for the window.
 
 ---
 
-## Conceptos
+## Concepts
 
-### Storage y el contrato de concurrencia (lee esto)
+### Storage and the concurrency contract (read this)
 
-`BridleStorage` abstrae la persistencia. Su pieza no negociable es **`withAgentLock`**:
-serializa las reservas por `(agente, moneda)`. **Sin esa serialización, el guardrail NO
-bloquea** — dos reservas concurrentes leerían el mismo total y ambas pasarían
-(overcommit). El adapter Postgres lo implementa con `pg_advisory_xact_lock`, que
-serializa incluso cuando el agente no tiene fila de presupuesto.
+`BridleStorage` abstracts persistence. Its non-negotiable piece is **`withAgentLock`**:
+it serializes reservations per `(agent, currency)`. **Without that serialization the
+guardrail does NOT block** — two concurrent reservations would read the same total and
+both pass (overcommit). The Postgres adapter implements it with `pg_advisory_xact_lock`,
+which serializes even when the agent has no budget row.
 
-Si implementas tu propio adapter de Storage, **debe pasar el test de concurrencia** que
-viaja con el paquete. No es opcional: es la garantía central.
+If you implement your own Storage adapter, **it must pass the concurrency test** that
+ships with the package. It is not optional: it is the central guarantee.
 
-### Escribir políticas por agente
+### Writing per-agent policies
 
-Bridle es **dueño del schema** de `agent_budgets`, así que ofrece la API de escritura —
-no escribas SQL crudo contra la tabla interna:
+Bridle **owns the schema** of `agent_budgets`, so it provides the write API — do not
+write raw SQL against the internal table:
 
 ```ts
 await storage.upsertBudget({
@@ -88,84 +90,85 @@ await storage.upsertBudget({
   currency: 'USDC',
   windowDurationSeconds: 86_400,
   maxAmountPerWindow: '50.00',
-  maxAmountPerTx: '5.00', // o null
-  unlimited: false,       // opt-in explícito para "sin límite"
+  maxAmountPerTx: '5.00', // or null
+  unlimited: false,       // explicit opt-in for "no limit"
 });
 ```
 
-Sin política propia y sin `defaultBudget`, el guard **deniega** (fail-safe).
+With no policy of its own and no `defaultBudget`, the guard **denies** (fail-safe).
 
-### Ciclo de vida de una reserva
+### Reservation lifecycle
 
-`reserved → committed` (pago liquidó) **o** `reserved → released` (falló/expiró). Un
-gasto confirmado nunca se revierte. Cada `reservationId` es único: reusarlo lanza
-`ReservationConflictError` (no se sobrescribe en silencio).
+`reserved → committed` (payment settled) **or** `reserved → released` (failed/expired). A
+committed spend is never reverted. Each `reservationId` is unique: reusing it throws
+`ReservationConflictError` (no silent overwrite).
 
-> **Caveat de finalidad — elige bien el TTL.** Si una reserva expira y se libera
-> (`released`), pero el pago liquida **más tarde**, el `commit` re-registra el gasto
-> (`released → committed`) — es lo correcto: el gasto fue real. Pero entre el release y
-> ese commit tardío, otra reserva pudo haber ocupado ese hueco, así que **la ventana
-> puede pasar el límite transitoriamente**. Para evitarlo, configura el **TTL de la
-> reserva mayor que el peor caso de finalidad del settlement** de tu rail (que la reserva
-> no expire antes de que el pago pueda liquidar).
+> **Finality caveat — choose the TTL well.** If a reservation expires and is released
+> (`released`), but the payment settles **later**, the `commit` re-records the spend
+> (`released → committed`) — which is correct: the spend was real. But between the release
+> and that late commit, another reservation may have taken that slot, so **the window can
+> transiently exceed the limit**. To avoid it, configure the **reservation TTL larger than
+> your rail's worst-case settlement finality** (so the reservation does not expire before
+> the payment can settle).
 
-### Expiración — TÚ debes llamar `expire()`
+### Expiration — YOU must call `expire()`
 
-Bridle **no arranca ningún scheduler**. Si nadie libera las reservas no redimidas, se
-acumulan y bloquean al agente legítimo. Llama `guard.expire()` periódicamente desde tu
-cron/worker, o usa el helper opt-in:
+Bridle **starts no scheduler**. If nobody releases unredeemed reservations, they pile up
+and block the legitimate agent. Call `guard.expire()` periodically from your cron/worker,
+or use the opt-in helper:
 
 ```ts
-const stop = guard.startExpirySweeper(60_000); // cada 60s; opt-in, no implícito
+const stop = guard.startExpirySweeper(60_000); // every 60s; opt-in, not implicit
 // …
-stop(); // cuando cierres el proceso
+stop(); // when you shut the process down
 ```
 
-### Identidad / anti-DoS (opcional)
+### Identity / anti-DoS (optional)
 
-El presupuesto se trackea contra una `agentAddress` declarada. Para que un atacante no
-agote el presupuesto de una víctima declarando su address, autentica la identidad antes
-de reservar. Esta feature **requiere** que pases un `signatureVerifier` al construir el
-guard (si no, `verifyAndConsumeNonce` lanza `ConfigurationError`):
+The budget is tracked against a declared `agentAddress`. So an attacker cannot drain a
+victim's budget by declaring their address, authenticate the identity before reserving.
+This feature **requires** that you pass a `signatureVerifier` when building the guard
+(otherwise `verifyAndConsumeNonce` throws `ConfigurationError`):
 
 ```ts
-import { BridleGuard, Secp256k1SignatureVerifier } from '@nexopay/bridle';
+import { BridleGuard, Secp256k1SignatureVerifier } from '@igarzatech/bridle';
 
 const guard = new BridleGuard({
   storage,
-  signatureVerifier: new Secp256k1SignatureVerifier(), // explícito: habilita identidad
+  signatureVerifier: new Secp256k1SignatureVerifier(), // explicit: enables identity
   config: { /* … */ },
 });
 
 await guard.verifyAndConsumeNonce({
   agentAddress,
-  nonce,                 // único por intento
+  nonce,                 // unique per attempt
   nonceTimestamp,        // unix seconds
-  signature,             // firma EIP-191 de `bridle-identity:<addr>:<nonce>:<ts>`
+  signature,             // EIP-191 signature of `bridle-identity:<addr>:<nonce>:<ts>`
 });
 ```
 
-Orden de verificación: **firma → frescura → anti-replay**. El `Secp256k1SignatureVerifier`
-por defecto valida firmas EOA estándar (MetaMask/viem/ethers) out-of-the-box. ¿Otro esquema
-de firma? Implementa la interfaz `SignatureVerifier` y pásalo en su lugar.
+Verification order: **signature → freshness → anti-replay**. The default
+`Secp256k1SignatureVerifier` validates standard EOA signatures (MetaMask/viem/ethers)
+out-of-the-box. Another signing scheme? Implement the `SignatureVerifier` interface and
+pass it instead.
 
-### Adapter Express (nice-to-have)
+### Express adapter (nice-to-have)
 
 ```ts
-import { bridleExpressErrorHandler } from '@nexopay/bridle/x402';
-app.use(bridleExpressErrorHandler); // mapea los errores de Bridle a HTTP (429/403/409/…)
+import { bridleExpressErrorHandler } from '@igarzatech/bridle/x402';
+app.use(bridleExpressErrorHandler); // maps Bridle errors to HTTP (429/403/409/…)
 ```
 
 ---
 
-## Decimales
+## Decimals
 
-El MVP fija **6 decimales** (stablecoins USD: pathUSD, USDC). Los montos cruzan la API
-como **string** (`"100.00"`) y se computan internamente como `bigint` exacto — sin
-floats. Decimales por moneda configurables es post-MVP.
+The MVP fixes **6 decimals** (USD stablecoins: pathUSD, USDC). Amounts cross the API as a
+**string** (`"100.00"`) and are computed internally as exact `bigint` — no floats.
+Per-currency decimals is post-MVP.
 
 ---
 
-## Estado
+## Status
 
-`0.1.0` — MVP. API pública versionada con semver.
+`0.1.0` — MVP. Public API versioned with semver.

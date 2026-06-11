@@ -1,12 +1,12 @@
 /**
- * Demo de @nexopay/bridle — el arco de 2 minutos.
+ * Demo de @igarzatech/bridle — el arco de 2 minutos.
  *
  * Un agente con presupuesto ajustado (alcanza para UN pago) intenta dos pagos:
  *   - Pago #1: pasa (reserve → pago → commit).
  *   - Pago #2: excede el presupuesto → Bridle lo BLOQUEA (BudgetExceededError) y el
  *     pago NUNCA se ejecuta. Ese contraste es el punto.
  *
- * Usa SOLO la API pública del paquete (import desde @nexopay/bridle y /x402),
+ * Usa SOLO la API pública del paquete (import desde @igarzatech/bridle y /x402),
  * exactamente como lo haría un dev externo.
  *
  *   BRIDLE_DEMO_MODE=mock  (default) — payFn simulado, cero setup.
@@ -16,8 +16,8 @@ import {
   BridleGuard,
   InMemoryStorage,
   BudgetExceededError,
-} from '@nexopay/bridle';
-import { withBudget } from '@nexopay/bridle/x402';
+} from '@igarzatech/bridle';
+import { withBudget } from '@igarzatech/bridle/x402';
 
 const MODE = process.env.BRIDLE_DEMO_MODE ?? 'mock';
 const CURRENCY = 'PATH_USD';

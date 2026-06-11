@@ -1,8 +1,8 @@
 /**
- * `@nexopay/bridle` — guardrail de presupuesto por agente para pagos agénticos.
+ * `@igarzatech/bridle` — guardrail de presupuesto por agente para pagos agénticos.
  *
  * Punto de entrada del core (framework-agnóstico). Los adapters viven en
- * subpaths: `@nexopay/bridle/postgres` (storage) y `@nexopay/bridle/x402` (hook).
+ * subpaths: `@igarzatech/bridle/postgres` (storage) y `@igarzatech/bridle/x402` (hook).
  */
 
 export * from './types';

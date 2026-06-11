@@ -1,8 +1,8 @@
 {
-  "name": "@nexopay/bridle-example",
+  "name": "@igarzatech/bridle-example",
   "version": "0.0.0",
   "private": true,
-  "description": "Demo de @nexopay/bridle (artefacto de referencia — NO se publica). Dogfoodea la API pública del paquete.",
+  "description": "Demo de @igarzatech/bridle (artefacto de referencia — NO se publica). Dogfoodea la API pública del paquete.",
   "engines": {
     "node": "20.x"
   },
@@ -14,7 +14,7 @@
     "demo": "ts-node --transpile-only -P tsconfig.run.json demo.ts"
   },
   "dependencies": {
-    "@nexopay/bridle": "workspace:*",
+    "@igarzatech/bridle": "workspace:*",
     "viem": "^2.52.0"
   },
   "devDependencies": {

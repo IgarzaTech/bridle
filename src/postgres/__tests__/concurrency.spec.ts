@@ -3,10 +3,10 @@
  * "el presupuesto bloquea de verdad". Sin la serialización de `withAgentLock`
  * (pg_advisory_xact_lock), N reservas concurrentes harían overcommit.
  *
- * Aislamiento: usa el prefijo de tabla `bridle_test_` para NO chocar con las tablas
- * que NexoPay (0003) crea en el mismo Postgres del CI durante la ventana 0004→0005.
+ * Aislamiento: usa el prefijo de tabla `bridle_test_` para NO chocar con otras tablas
+ * que puedan vivir en el mismo Postgres del CI.
  *
- * Gated por DATABASE_HOST — se omite si no hay Postgres (no rompe init.sh local).
+ * Gated por DATABASE_HOST — se omite si no hay Postgres (no rompe el test local).
  */
 import { Pool } from 'pg';
 import { BridleGuard } from '../../guard';
@@ -48,9 +48,9 @@ if (IN_CI && !HAS_DB) {
     pool = new Pool({
       host: process.env.DATABASE_HOST,
       port: parseInt(process.env.DATABASE_PORT ?? '5432', 10),
-      user: process.env.DATABASE_USER ?? 'nexopay',
+      user: process.env.DATABASE_USER ?? 'bridle',
       password: process.env.DATABASE_PASSWORD ?? '',
-      database: process.env.DATABASE_NAME ?? 'nexopay_test',
+      database: process.env.DATABASE_NAME ?? 'bridle_test',
     });
     adapter = new PostgresStorageAdapter(pool, { tablePrefix: 'bridle_test_' });
     await adapter.dropSchema().catch(() => undefined);

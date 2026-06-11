@@ -1,5 +1,5 @@
 {
-  "name": "@nexopay/bridle",
+  "name": "@igarzatech/bridle",
   "version": "0.1.0",
   "description": "Per-agent budget guardrail for agentic payments — el presupuesto que bloquea de verdad. Framework-agnostic, storage-pluggable, x402-ready.",
   "license": "Apache-2.0",
@@ -47,11 +47,11 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "build:example": "pnpm --filter @nexopay/bridle-example build",
+    "build:example": "pnpm --filter @igarzatech/bridle-example build",
     "lint": "eslint \"src/**/*.ts\"",
-    "lint:example": "pnpm --filter @nexopay/bridle-example lint",
+    "lint:example": "pnpm --filter @igarzatech/bridle-example lint",
     "test": "jest --passWithNoTests",
-    "demo": "pnpm --filter @nexopay/bridle-example demo",
+    "demo": "pnpm --filter @igarzatech/bridle-example demo",
     "clean": "rm -rf dist"
   },
   "dependencies": {
