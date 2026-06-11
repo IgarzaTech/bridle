@@ -30,6 +30,11 @@ need an account funded with test pathUSD.
    # fund it with testnet pathUSD
    cast rpc tempo_fundAddress <YOUR_ADDRESS> --rpc-url https://rpc.moderato.tempo.xyz
    ```
+   ```bash
+   # No Foundry? Same call with curl:
+   curl -s -X POST https://rpc.moderato.tempo.xyz -H "Content-Type: application/json" \
+     -d '{"jsonrpc":"2.0","method":"tempo_fundAddress","params":["<YOUR_ADDRESS>"],"id":1}'
+   ```
 2. **Export the environment** and run:
    ```bash
    export BRIDLE_DEMO_MODE=tempo
