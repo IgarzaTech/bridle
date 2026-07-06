@@ -1,0 +1,104 @@
+name: Release
+
+# Publica @igarzatech/bridle a npm cuando se empuja un tag de versión (ej. v0.2.1).
+# Flujo: verify (CI completo, gate) -> publish (npm publish --provenance).
+# El NPM_TOKEN vive como secret del environment `release`.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    # Postgres real: el test de concurrencia (la garantía "el presupuesto bloquea de
+    # verdad") DEBE correr antes de publicar. Sin DB en CI, el gate FALLA.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bridle
+          POSTGRES_PASSWORD: bridle
+          POSTGRES_DB: bridle_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bridle"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Test (incluye concurrencia contra Postgres real)
+        run: pnpm test
+        env:
+          DATABASE_HOST: localhost
+          DATABASE_PORT: 5432
+          DATABASE_USER: bridle
+          DATABASE_PASSWORD: bridle
+          DATABASE_NAME: bridle_test
+
+      - name: El tag coincide con package.json version
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "package.json=$PKG · tag=$TAG"
+          if [ "$PKG" != "$TAG" ]; then
+            echo "::error::El tag $GITHUB_REF_NAME no coincide con package.json ($PKG). Sube la versión antes de taggear."
+            exit 1
+          fi
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    # Gatea el secret NPM_TOKEN. Aquí puedes añadir required reviewers/timers.
+    environment: release
+    permissions:
+      contents: read
+      id-token: write # requerido para npm provenance
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node 20 (+ registro npm)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (genera dist/ para publicar)
+        run: pnpm run build
+
+      - name: Publish a npm (con provenance)
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
