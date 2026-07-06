@@ -74,7 +74,7 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     # Gatea el secret NPM_TOKEN. Aquí puedes añadir required reviewers/timers.
-    environment: NPM_TOKEN
+    environment: release
     permissions:
       contents: read
       id-token: write # requerido para npm provenance
