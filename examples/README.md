@@ -1,75 +1,80 @@
-# Demo de Bridle — el presupuesto que bloquea de verdad
+# Bridle demo — the budget that actually blocks
 
-Demo ejecutable de [`@igarzatech/bridle`](../README.md). Un agente con presupuesto ajustado
-intenta **dos pagos**: el primero pasa, el segundo se **bloquea** porque excede el
-presupuesto — y el pago **nunca se ejecuta**. Ese contraste es el punto.
+Runnable demo of [`@igarzatech/bridle`](../README.md). An agent with a tight budget
+attempts **two payments**: the first goes through, the second is **blocked** because it
+exceeds the budget — and the payment **never executes**. That contrast is the point.
 
-> Es un artefacto de referencia: **no se publica a npm** (no está en el `files` del
-> paquete). Importa Bridle por su API pública, igual que lo haría un dev externo.
+> This is a reference artifact: it is **not published to npm** (it's not in the package's
+> `files`). It imports Bridle through its public API, exactly as an external dev would.
 
-## Correr (modo mock — cero setup)
+## Run (mock mode — zero setup)
 
 ```bash
-pnpm install            # desde la raíz del monorepo
-pnpm --filter @igarzatech/bridle build   # construye el paquete que el demo importa
+pnpm install            # from the repo root
+pnpm --filter @igarzatech/bridle build   # builds the package the demo imports
 pnpm --filter @igarzatech/bridle-example demo
 ```
 
-`BRIDLE_DEMO_MODE=mock` (default): el pago es simulado (un `await` + un txHash falso).
-Corre al instante, sin red ni claves.
+`BRIDLE_DEMO_MODE=mock` (default): the payment is simulated (an `await` + a fake txHash).
+Runs instantly, no network and no keys.
 
-## Correr (modo tempo — testnet real)
+## Run (tempo mode — real testnet)
 
-Envía un `transferWithMemo` de pathUSD de verdad en Tempo testnet (Moderato, chainId
-42431). Necesitas una cuenta fondeada con pathUSD de prueba.
+Sends a real pathUSD `transferWithMemo` on Tempo testnet (Moderato, chainId 42431). You
+need an account funded with test pathUSD.
 
-1. **Fondea una wallet** (faucet de Tempo, vía `cast`):
+1. **Fund a wallet** (Tempo faucet, via `cast`):
    ```bash
-   # genera un signer de prueba
+   # generate a test signer
    cast wallet new
-   # fondéalo con pathUSD de testnet
-   cast rpc tempo_fundAddress <TU_ADDRESS> --rpc-url https://rpc.moderato.tempo.xyz
+   # fund it with testnet pathUSD
+   cast rpc tempo_fundAddress <YOUR_ADDRESS> --rpc-url https://rpc.moderato.tempo.xyz
    ```
-2. **Exporta el entorno** y corre:
+   ```bash
+   # No Foundry? Same call with curl:
+   curl -s -X POST https://rpc.moderato.tempo.xyz -H "Content-Type: application/json" \
+     -d '{"jsonrpc":"2.0","method":"tempo_fundAddress","params":["<YOUR_ADDRESS>"],"id":1}'
+   ```
+2. **Export the environment** and run:
    ```bash
    export BRIDLE_DEMO_MODE=tempo
    export TEMPO_RPC_URL=https://rpc.moderato.tempo.xyz
-   export TEMPO_TEST_PRIVATE_KEY=0x...   # la clave del signer fondeado
-   export TEMPO_TEST_RECIPIENT=0x...     # quién recibe el pago de prueba
+   export TEMPO_TEST_PRIVATE_KEY=0x...   # the funded signer's key
+   export TEMPO_TEST_RECIPIENT=0x...     # who receives the test payment
    pnpm --filter @igarzatech/bridle-example demo
    ```
 
-El pago #1 imprime el **txHash real** + un link al explorer
-(`https://explore.testnet.tempo.xyz/tx/<txHash>`). El pago #2 se bloquea **sin** tocar la
-cadena (Bridle deniega antes de pagar).
+Payment #1 prints the **real txHash** + a link to the explorer
+(`https://explore.testnet.tempo.xyz/tx/<txHash>`). Payment #2 is blocked **without**
+touching the chain (Bridle denies before paying).
 
-> La identidad / anti-DoS (firma + nonce) NO entra en este demo para mantener el foco en
-> el bloqueo de presupuesto. Es opcional y se documenta en el [README del paquete](../README.md).
+> Identity / anti-DoS (signature + nonce) is NOT part of this demo, to keep the focus on
+> budget blocking. It is optional and documented in the [package README](../README.md).
 
 ---
 
-## Guion de grabación (2 min)
+## Recording script (2 min) — internal note
 
-**0:00 — Encuadre (15s).** "Esto es Bridle: un guardrail de presupuesto por agente. La
-promesa es simple — cuando un agente se queda sin presupuesto, el pago **no ocurre**. No
-'se registra y avisamos': no ocurre. Lo vemos en vivo."
+**0:00 — Framing (15s).** "This is Bridle: a per-agent budget guardrail. The promise is
+simple — when an agent runs out of budget, the payment **does not happen**. Not 'we log it
+and notify': it does not happen. Let's see it live."
 
-**0:15 — Setup (20s).** Muestra el código: presupuesto `1.00`, dos pagos de `1.00`.
-"Presupuesto para exactamente un pago. Envuelvo mi llamada de pago con `withBudget` — esa
-es toda la integración."
+**0:15 — Setup (20s).** Show the code: budget `1.00`, two payments of `1.00`. "Budget for
+exactly one payment. I wrap my payment call with `withBudget` — that's the whole
+integration."
 
-**0:35 — Corre el demo (40s).** `pnpm --filter @igarzatech/bridle-example demo` (modo tempo).
-- Pago #1 → **OK**: señala el txHash y abre el link al explorer. "Pago real, on-chain,
-  confirmado. Bridle reservó, dejó pagar, y marcó el gasto."
-- Pago #2 → **🛑 BLOQUEADO**. "Segundo pago: excede el presupuesto. Bridle lanza
-  `BudgetExceededError` **antes** de tocar la cadena. Mira el explorer — no hay segunda
-  transacción. El dinero nunca se movió."
+**0:35 — Run the demo (40s).** `pnpm --filter @igarzatech/bridle-example demo` (tempo mode).
+- Payment #1 → **OK**: point at the txHash and open the explorer link. "Real payment,
+  on-chain, confirmed. Bridle reserved, let it pay, and recorded the spend."
+- Payment #2 → **🛑 BLOCKED**. "Second payment: exceeds the budget. Bridle throws
+  `BudgetExceededError` **before** touching the chain. Check the explorer — there's no
+  second transaction. The money never moved."
 
-**1:15 — El por qué (30s).** "Este demo corre con el storage **in-memory** (cero setup, para
-que lo veas en segundos). La garantía bajo concurrencia —si 20 pagos llegan a la vez,
-exactamente uno pasa, nunca dos— la da el **adapter de Postgres** con un advisory lock, y está
-validada por el **test de concurrencia contra Postgres real** que viene en el paquete. No te
-fíes de este video para eso: corre ese test."
+**1:15 — The why (30s).** "This demo runs with the **in-memory** storage (zero setup, so
+you see it in seconds). The concurrency guarantee — if 20 payments arrive at once, exactly
+one passes, never two — comes from the **Postgres adapter** with an advisory lock, and is
+validated by the **concurrency test against real Postgres** that ships in the package.
+Don't trust this video for that: run that test."
 
-**1:45 — Cierre (15s).** "Framework-agnóstico, storage-pluggable, Apache-2.0.
-`pnpm add @igarzatech/bridle`. El guardrail que de verdad bloquea."
+**1:45 — Close (15s).** "Framework-agnostic, storage-pluggable, Apache-2.0.
+`pnpm add @igarzatech/bridle`. The guardrail that really blocks."
