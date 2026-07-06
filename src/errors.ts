@@ -13,7 +13,11 @@ export type BridleErrorCode =
   | 'nonce_already_used'
   | 'reservation_conflict'
   | 'configuration_required'
-  | 'invalid_amount';
+  | 'invalid_amount'
+  // Policy Engine (feature 0006). Distinguibles del deny de presupuesto: el host
+  // los mapea a 403 (política), no a 429 (presupuesto).
+  | 'policy_denied'
+  | 'policy_invalid';
 
 export class BridleError extends Error {
   readonly code: BridleErrorCode;
@@ -100,5 +104,40 @@ export class InvalidAmountError extends BridleError {
 export class ConfigurationError extends BridleError {
   constructor(message: string) {
     super('configuration_required', message);
+  }
+}
+
+// ── Policy Engine (feature 0006) ────────────────────────────────────────────
+
+/**
+ * Una política DENEGÓ el gasto. Lleva el `reasonCode` y el `ruleId` de la regla
+ * causante para trazabilidad. Distinguible del `BudgetExceededError`: el host lo
+ * mapea a 403 (prohibido por política), no a 429 (sobre presupuesto). No es
+ * transitorio — reintentar no cambia la decisión (salvo reglas temporales).
+ */
+export class PolicyDeniedError extends BridleError {
+  /** Código de razón estable (ej. 'recipient_not_allowed'). */
+  readonly reasonCode: string;
+  /** Id de la regla que causó el deny, o null. */
+  readonly ruleId: string | null;
+  constructor(reasonCode: string, ruleId: string | null, message: string) {
+    super('policy_denied', message);
+    this.reasonCode = reasonCode;
+    this.ruleId = ruleId;
+  }
+}
+
+/**
+ * El `PolicySet` es inválido (monto no parseable, tipo de regla desconocido, TZ
+ * inválida, allowlist vacía, o falta un campo del contexto que la política exige).
+ * Fail-safe estructural: un typo en una política NUNCA abre el gasto — se deniega.
+ * `ruleId` identifica la regla ofensora cuando se conoce.
+ */
+export class PolicyInvalidError extends BridleError {
+  /** Id de la regla ofensora, o null si el error es del set completo. */
+  readonly ruleId: string | null;
+  constructor(message: string, ruleId: string | null = null) {
+    super('policy_invalid', message);
+    this.ruleId = ruleId;
   }
 }

@@ -1,5 +1,6 @@
 import type { BridleStorage } from './storage';
 import type { AgentBudgetRecord, LedgerEntry, LedgerStatus } from './types';
+import type { PolicySet } from './policy/types';
 import { NonceAlreadyUsedError, ReservationConflictError } from './errors';
 
 interface NonceRecord {
@@ -20,6 +21,7 @@ export class InMemoryStorage implements BridleStorage {
   private readonly ledger = new Map<string, LedgerEntry>();
   private readonly nonces = new Map<string, NonceRecord>();
   private readonly locks = new Map<string, Promise<unknown>>();
+  private readonly policySets = new Map<string, PolicySet>();
 
   private key(agentAddress: string, currency: string): string {
     return `${agentAddress.toLowerCase()}|${currency}`;
@@ -28,6 +30,15 @@ export class InMemoryStorage implements BridleStorage {
   /** Helper de tests (sync): registra una política de presupuesto. */
   setBudget(budget: AgentBudgetRecord): void {
     this.budgets.set(this.key(budget.agentAddress, budget.currency), budget);
+  }
+
+  /** Helper de tests (sync): registra el `PolicySet` de un agente (feature 0006). */
+  setPolicySet(agentAddress: string, currency: string, set: PolicySet): void {
+    this.policySets.set(this.key(agentAddress, currency), set);
+  }
+
+  getPolicySet(agentAddress: string, currency: string): Promise<PolicySet | null> {
+    return Promise.resolve(this.policySets.get(this.key(agentAddress, currency)) ?? null);
   }
 
   upsertBudget(record: AgentBudgetRecord): Promise<void> {
@@ -75,6 +86,29 @@ export class InMemoryStorage implements BridleStorage {
         e.agentAddress.toLowerCase() === agentAddress.toLowerCase() &&
         e.currency === currency &&
         (e.status === 'reserved' || e.status === 'committed') &&
+        e.windowStart.getTime() >= windowFilterStart.getTime()
+      ) {
+        total += e.amountScaled;
+      }
+    }
+    return Promise.resolve(total);
+  }
+
+  sumActiveInWindowByCategory(
+    agentAddress: string,
+    currency: string,
+    category: string,
+    windowFilterStart: Date,
+  ): Promise<bigint> {
+    const cat = category.toLowerCase();
+    let total = 0n;
+    for (const e of this.ledger.values()) {
+      if (
+        e.agentAddress.toLowerCase() === agentAddress.toLowerCase() &&
+        e.currency === currency &&
+        (e.status === 'reserved' || e.status === 'committed') &&
+        (e.category ?? null) !== null &&
+        e.category?.toLowerCase() === cat &&
         e.windowStart.getTime() >= windowFilterStart.getTime()
       ) {
         total += e.amountScaled;

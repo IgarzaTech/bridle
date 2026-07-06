@@ -3,10 +3,10 @@
  * "el presupuesto bloquea de verdad". Sin la serialización de `withAgentLock`
  * (pg_advisory_xact_lock), N reservas concurrentes harían overcommit.
  *
- * Aislamiento: usa el prefijo de tabla `bridle_test_` para NO chocar con otras tablas
- * que puedan vivir en el mismo Postgres del CI.
+ * Aislamiento: usa el prefijo de tabla `bridle_test_` para NO chocar con las tablas
+ * que NexoPay (0003) crea en el mismo Postgres del CI durante la ventana 0004→0005.
  *
- * Gated por DATABASE_HOST — se omite si no hay Postgres (no rompe el test local).
+ * Gated por DATABASE_HOST — se omite si no hay Postgres (no rompe init.sh local).
  */
 import { Pool } from 'pg';
 import { BridleGuard } from '../../guard';
@@ -16,10 +16,9 @@ import { parseAmount } from '../../amount';
 import { ReservationConflictError } from '../../errors';
 
 const HAS_DB = !!process.env.DATABASE_HOST;
-// GitHub Actions setea CI='true'; Azure DevOps setea TF_BUILD='True'. En cualquier CI
-// este test NO puede skippear: la garantía de que "el presupuesto bloquea" debe
-// validarse de verdad. Gate genérico para no atarse a un proveedor de CI.
-const IN_CI = !!process.env.CI || process.env.TF_BUILD === 'True';
+// Azure DevOps setea TF_BUILD='True' en todo pipeline. En CI este test NO puede
+// skippear: la garantía de que "el presupuesto bloquea" debe validarse de verdad.
+const IN_CI = process.env.TF_BUILD === 'True';
 
 const CUR = 'USDC';
 const AMOUNT = '1.00';
@@ -48,9 +47,9 @@ if (IN_CI && !HAS_DB) {
     pool = new Pool({
       host: process.env.DATABASE_HOST,
       port: parseInt(process.env.DATABASE_PORT ?? '5432', 10),
-      user: process.env.DATABASE_USER ?? 'bridle',
+      user: process.env.DATABASE_USER ?? 'nexopay',
       password: process.env.DATABASE_PASSWORD ?? '',
-      database: process.env.DATABASE_NAME ?? 'bridle_test',
+      database: process.env.DATABASE_NAME ?? 'nexopay_test',
     });
     adapter = new PostgresStorageAdapter(pool, { tablePrefix: 'bridle_test_' });
     await adapter.dropSchema().catch(() => undefined);

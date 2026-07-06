@@ -168,6 +168,96 @@ app.use(bridleExpressErrorHandler); // mapea los errores de Bridle a HTTP (429/4
 
 ---
 
+## Policy Engine — reglas declarativas de gasto (0.2.0)
+
+Además de *cuánto* puede gastar un agente (presupuesto), Bridle gobierna **en qué, a
+quién y cuándo**: un `PolicySet` **declarativo** (datos JSON, no código) evaluado en el
+**mismo punto de enforcement** que el presupuesto (dentro de `withAgentLock`), así un
+deny por política hereda la misma garantía de concurrencia — no inserta reserva.
+
+Tipos de regla del MVP: **allowlist/denylist de recipients**, **límites por categoría**
+(monto por ventana y per-tx, independientes por categoría) y **franjas horarias** con
+zona horaria explícita (IANA/UTC).
+
+**Precedencia fija y determinista** (independiente del orden del array):
+1. `deny` de recipient gana siempre.
+2. allowlist de recipient: lo no listado → deny.
+3. reglas temporales y límites por categoría.
+4. presupuesto global (0004) al final.
+
+**Fail-safe:** una regla malformada, un tipo desconocido, o una política que referencia
+un campo (`recipient`/`category`) que el contexto del gasto NO trae → **deny + error
+tipado** (nunca un allow silencioso). Un typo en una política jamás abre el gasto.
+
+> ⚠ Si configuras una allowlist de recipients (o reglas de categoría) pero NO pasas
+> `context.recipient` / `context.category` en la reserva, Bridle **deniega** — no ignora
+> la regla. Es intencional: evita la falsa sensación de seguridad.
+
+### Ejemplo copy-paste (allowlist + límite por categoría + franja horaria)
+
+```ts
+import { BridleGuard, type PolicySet, POLICY_SCHEMA_VERSION } from '@igarzatech/bridle';
+import { withBudget } from '@igarzatech/bridle/x402';
+
+// El PolicySet es JSON puro: serializable, versionado, auditable.
+const policySet: PolicySet = {
+  schemaVersion: POLICY_SCHEMA_VERSION,
+  rules: [
+    // 1. Solo estos recipients (lo no listado → deny). El denylist gana siempre.
+    { type: 'recipient', id: 'vendors', allow: ['0xvendor-a', '0xvendor-b'] },
+    // 2. Cupo de $50/día para "cloud" (independiente del presupuesto global).
+    {
+      type: 'category',
+      id: 'cloud-cap',
+      category: 'cloud',
+      maxAmountPerWindow: '50.00',
+      windowDurationSeconds: 86_400,
+      maxAmountPerTx: '10.00',
+    },
+    // 3. Solo en horario laboral, TZ EXPLÍCITA (nunca la del servidor).
+    {
+      type: 'timeWindow',
+      id: 'business-hours',
+      timezone: 'America/New_York',
+      startMinute: 9 * 60,   // 09:00
+      endMinute: 17 * 60,    // 17:00
+      daysOfWeek: [1, 2, 3, 4, 5], // lun–vie
+    },
+  ],
+};
+
+// Origen del set: config estática (defaultPolicySet) o vía Storage.getPolicySet.
+const guard = new BridleGuard({
+  storage,
+  config: {
+    defaultBudget: { maxAmountPerWindow: '100.00', windowDurationSeconds: 86_400 },
+    defaultPolicySet: policySet,
+    // Opcional: sink de auditoría (recibe TODA decisión, allow y deny).
+    auditSink: { record: (e) => console.log(e.decision.reasonCode, e.decision.ruleId) },
+  },
+});
+
+// El context de gasto se propaga por withBudget hacia la evaluación de políticas.
+await withBudget(
+  guard,
+  {
+    reservationId: 'r1',
+    agentAddress: '0xabc...',
+    amount: '5.00',
+    currency: 'USDC',
+    context: { recipient: '0xvendor-a', category: 'cloud' },
+  },
+  async () => 'paid', // tu pago real
+);
+// Un deny por política lanza PolicyDeniedError (HTTP 403 vía mapBridleErrorToHttp),
+// distinguible del 429 de presupuesto. Un set inválido → PolicyInvalidError (403).
+```
+
+Valida un `PolicySet` en tiempo de configuración con `validatePolicySet(set)` (devuelve
+`{ ok: true }` o un error que identifica la regla ofensora — no lanza).
+
+---
+
 ## Decimales
 
 El MVP fija **6 decimales** (stablecoins USD: pathUSD, USDC). Los montos cruzan la API
@@ -178,4 +268,4 @@ floats. Decimales por moneda configurables es post-MVP.
 
 ## Estado
 
-`0.1.0` — MVP. API pública versionada con semver.
+`0.2.0` — Budget guardrail + Policy Engine. API pública versionada con semver.

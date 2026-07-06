@@ -25,6 +25,7 @@ export function createSchemaSql(naming: SchemaNaming): string {
   const ledger = qualifiedTable('budget_ledger', naming);
   const nonces = qualifiedTable('used_nonces', naming);
   const idxWindow = `"${naming.tablePrefix ?? ''}idx_budget_ledger_window"`;
+  const idxCategory = `"${naming.tablePrefix ?? ''}idx_budget_ledger_category"`;
   const schemaStmt = naming.schema ? `CREATE SCHEMA IF NOT EXISTS "${naming.schema}";\n` : '';
 
   return `
@@ -44,10 +45,17 @@ CREATE TABLE IF NOT EXISTS ${ledger} (
   amount_scaled bigint NOT NULL,
   status varchar(16) NOT NULL DEFAULT 'reserved',
   window_start timestamptz NOT NULL,
-  expires_at timestamptz NOT NULL
+  expires_at timestamptz NOT NULL,
+  -- feature 0006: categoría del gasto (nullable, aditiva). Alimenta los límites
+  -- de gasto POR CATEGORÍA. Las reservas sin política de categoría la dejan NULL.
+  category varchar(64)
 );
+-- Aditivo e idempotente para bases ya migradas antes de 0006 (no rompe 0004).
+ALTER TABLE ${ledger} ADD COLUMN IF NOT EXISTS category varchar(64);
 CREATE INDEX IF NOT EXISTS ${idxWindow}
   ON ${ledger} (agent_address, currency, window_start);
+CREATE INDEX IF NOT EXISTS ${idxCategory}
+  ON ${ledger} (agent_address, currency, category, window_start);
 CREATE TABLE IF NOT EXISTS ${nonces} (
   nonce varchar(128) PRIMARY KEY,
   agent_address varchar(42) NOT NULL,

@@ -9,6 +9,7 @@
  */
 import type { BridleGuard } from '../guard';
 import { BridleError } from '../errors';
+import type { SpendContext } from '../policy/types';
 
 /** Datos del intento de pago que Bridle reserva. Montos como wire string. */
 export interface PaymentAttempt {
@@ -19,6 +20,12 @@ export interface PaymentAttempt {
   currency: string;
   /** TTL opcional de la reserva (segundos). */
   reservationTtlSeconds?: number;
+  /**
+   * Contexto de gasto para el Policy Engine (feature 0006): recipient, category,
+   * tags. OPCIONAL — se propaga tal cual a `checkAndReserve` (AC-11). Sin política
+   * activa, se ignora (retrocompatible).
+   */
+  context?: SpendContext;
 }
 
 /**
@@ -49,6 +56,8 @@ export async function withBudget<T>(
     amount: attempt.amount,
     currency: attempt.currency,
     reservationTtlSeconds: attempt.reservationTtlSeconds,
+    // AC-11: el contexto de gasto se propaga hacia la evaluación de políticas.
+    context: attempt.context,
   });
 
   let result: T;
@@ -89,6 +98,9 @@ export interface HttpErrorResponse {
  *  - nonce_already_used → 409
  *  - configuration_required → 503 (feature usada sin configuración; no transitorio)
  *  - invalid_amount → 400
+ *  - policy_denied → 403 (prohibido por política; feature 0006, AC-11). DISTINGUIBLE
+ *    del 429 de presupuesto: "no puedes gastar aquí" no es lo mismo que "gastaste de más".
+ *  - policy_invalid → 403 (fail-safe: política malformada o contexto incompleto).
  */
 export function mapBridleErrorToHttp(err: BridleError): HttpErrorResponse {
   const base = { code: err.code, message: err.message };
@@ -113,6 +125,12 @@ export function mapBridleErrorToHttp(err: BridleError): HttpErrorResponse {
       return { status: 503, body: base };
     case 'invalid_amount':
       return { status: 400, body: base };
+    // Policy Engine (feature 0006): política → 403, NO 429. El host distingue
+    // "prohibido por política" de "sobre presupuesto" por el status y el code.
+    case 'policy_denied':
+      return { status: 403, body: base };
+    case 'policy_invalid':
+      return { status: 403, body: base };
     default:
       return { status: 400, body: base };
   }

@@ -155,12 +155,30 @@ export class PostgresStorageAdapter implements BridleStorage {
     return BigInt(res.rows[0]?.total ?? '0');
   }
 
+  async sumActiveInWindowByCategory(
+    agentAddress: string,
+    currency: string,
+    category: string,
+    windowFilterStart: Date,
+  ): Promise<bigint> {
+    const res = await this.query<SumRow>(
+      `SELECT COALESCE(SUM(amount_scaled), 0)::text AS total
+       FROM ${this.table('budget_ledger')}
+       WHERE agent_address = $1 AND currency = $2
+         AND lower(category) = lower($3)
+         AND status IN ('reserved', 'committed')
+         AND window_start >= $4`,
+      [agentAddress.toLowerCase(), currency, category, windowFilterStart.toISOString()],
+    );
+    return BigInt(res.rows[0]?.total ?? '0');
+  }
+
   async insertReservation(entry: LedgerEntry): Promise<void> {
     try {
       await this.query(
         `INSERT INTO ${this.table('budget_ledger')}
-          (reservation_id, agent_address, currency, amount_scaled, status, window_start, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          (reservation_id, agent_address, currency, amount_scaled, status, window_start, expires_at, category)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           entry.reservationId,
           entry.agentAddress.toLowerCase(),
@@ -169,6 +187,7 @@ export class PostgresStorageAdapter implements BridleStorage {
           entry.status,
           entry.windowStart.toISOString(),
           entry.expiresAt.toISOString(),
+          entry.category ?? null,
         ],
       );
     } catch (err) {

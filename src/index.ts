@@ -11,5 +11,6 @@ export * from './storage';
 export * from './signature-verifier';
 export * from './amount';
 export * from './guard';
+export * from './policy';
 export { Secp256k1SignatureVerifier } from './secp256k1-verifier';
 export { InMemoryStorage } from './in-memory-storage';

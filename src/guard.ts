@@ -9,7 +9,17 @@ import {
   ConfigurationError,
   IdentityMismatchError,
   NonceTooOldError,
+  PolicyDeniedError,
+  PolicyInvalidError,
 } from './errors';
+import type {
+  PolicyAuditSink,
+  PolicyDecision,
+  PolicySet,
+  SpendContext,
+} from './policy/types';
+import { noopAuditSink } from './policy/types';
+import { evaluatePolicySet } from './policy/engine';
 
 const DEFAULT_NONCE_MAX_AGE_SECONDS = 300;
 
@@ -54,12 +64,15 @@ export class BridleGuard {
   private readonly signatureVerifier?: SignatureVerifier;
   private readonly config: BridleConfig;
   private readonly nonceMaxAgeSeconds: number;
+  private readonly auditSink: PolicyAuditSink;
 
   constructor(deps: BridleGuardDeps) {
     this.storage = deps.storage;
     this.signatureVerifier = deps.signatureVerifier;
     this.config = deps.config;
     this.nonceMaxAgeSeconds = deps.config.nonceMaxAgeSeconds ?? DEFAULT_NONCE_MAX_AGE_SECONDS;
+    // Default no-op: sin efectos colaterales ni timers (mismo criterio del guard).
+    this.auditSink = deps.config.auditSink ?? noopAuditSink;
   }
 
   /**
@@ -113,44 +126,112 @@ export class BridleGuard {
 
   /**
    * Verifica el presupuesto y RESERVA el monto. Lanza si deniega.
+   *  - política deniega (feature 0006) → PolicyDeniedError (deny NO inserta reserva)
+   *  - PolicySet inválido / campo de contexto ausente → PolicyInvalidError (fail-safe)
    *  - sin política ni default → BudgetPolicyNotConfiguredError (fail-safe)
    *  - monto > maxPerTx → AmountExceedsPerTxLimitError
    *  - total de ventana + monto > maxWindow → BudgetExceededError
-   * La sección crítica corre dentro de `withAgentLock` (serializa por agente).
+   *
+   * La sección crítica corre dentro de `withAgentLock` (serializa por agente). La
+   * evaluación de políticas ocurre DENTRO de esa misma sección — hereda la garantía
+   * de concurrencia: un deny por política no inserta reserva (AC-2).
    */
   async checkAndReserve(input: ReserveInput, now: Date = new Date()): Promise<void> {
     const amountScaled = parseAmount(input.amount);
+    const context: SpendContext = input.context ?? {};
+    // Normalizamos la categoría a lowercase una sola vez: es lo que se persiste y lo
+    // que la suma por categoría compara (consistencia con el motor de políticas).
+    const category = context.category !== undefined ? context.category.toLowerCase() : null;
 
     const budget = await this.storage.getBudget(input.agentAddress, input.currency);
 
-    let maxWindowScaled: bigint;
-    let windowSeconds: number;
+    let unlimited = false;
+    let maxWindowScaled: bigint | null = null;
+    let windowSeconds: number | null = null;
     let maxPerTxScaled: bigint | null = null;
 
     if (budget) {
       if (budget.unlimited) {
-        return; // opt-in explícito: sin límite, sin ledger entry.
+        unlimited = true;
+      } else {
+        maxWindowScaled = parseAmount(budget.maxAmountPerWindow);
+        windowSeconds = budget.windowDurationSeconds;
+        maxPerTxScaled = budget.maxAmountPerTx !== null ? parseAmount(budget.maxAmountPerTx) : null;
       }
-      maxWindowScaled = parseAmount(budget.maxAmountPerWindow);
-      windowSeconds = budget.windowDurationSeconds;
-      maxPerTxScaled = budget.maxAmountPerTx !== null ? parseAmount(budget.maxAmountPerTx) : null;
     } else if (this.config.defaultBudget) {
       maxWindowScaled = parseAmount(this.config.defaultBudget.maxAmountPerWindow);
       windowSeconds = this.config.defaultBudget.windowDurationSeconds;
-    } else {
-      // Fail-safe: nunca permitir sin una política explícita.
+    }
+
+    // Resolvemos el PolicySet: primero por Storage (si el adapter lo soporta), luego
+    // el default estático de config. La lectura por Storage entra en el lock más abajo.
+    const staticPolicySet = this.config.defaultPolicySet ?? null;
+
+    // Sin presupuesto (ni fila, ni unlimited, ni default) Y sin política → fail-safe.
+    if (!unlimited && maxWindowScaled === null && staticPolicySet === null && !this.storage.getPolicySet) {
       throw new BudgetPolicyNotConfiguredError();
     }
 
-    // Límite por transacción: no depende de la ventana, se evalúa fuera del lock.
+    // Límite global por transacción: no depende de la ventana, se evalúa fuera del lock.
     if (maxPerTxScaled !== null && amountScaled > maxPerTxScaled) {
       throw new AmountExceedsPerTxLimitError();
     }
 
     const ttlSeconds =
-      input.reservationTtlSeconds ?? this.config.defaultReservationTtlSeconds ?? windowSeconds;
+      input.reservationTtlSeconds ??
+      this.config.defaultReservationTtlSeconds ??
+      windowSeconds ??
+      DEFAULT_NONCE_MAX_AGE_SECONDS;
 
     await this.storage.withAgentLock(input.agentAddress, input.currency, async () => {
+      // ── 1. Policy Engine (feature 0006): dentro del lock, ANTES del presupuesto ──
+      const storagePolicySet = this.storage.getPolicySet
+        ? await this.storage.getPolicySet(input.agentAddress, input.currency)
+        : null;
+      const policySet: PolicySet | null = storagePolicySet ?? staticPolicySet;
+
+      if (policySet) {
+        const decision = await evaluatePolicySet({
+          policySet,
+          context,
+          amountScaled,
+          now,
+          sumCategory: (cat, windowFilterStart) =>
+            this.sumCategorySpend(input.agentAddress, input.currency, cat, windowFilterStart),
+        });
+        this.emitAudit(input, now, decision);
+        if (!decision.allowed) {
+          // Un deny por política NO inserta reserva (AC-2). Error distinguible del
+          // deny de presupuesto (AC-11): política → PolicyDenied/Invalid (403).
+          if (decision.reasonCode === 'invalid_policy') {
+            throw new PolicyInvalidError(
+              decision.message ?? 'policy set is invalid',
+              decision.ruleId,
+            );
+          }
+          if (decision.reasonCode === 'missing_context_field') {
+            throw new PolicyInvalidError(
+              decision.message ?? 'spend context is missing a field a policy requires',
+              decision.ruleId,
+            );
+          }
+          throw new PolicyDeniedError(
+            decision.reasonCode,
+            decision.ruleId,
+            decision.message ?? 'denied by policy',
+          );
+        }
+      }
+
+      // ── 2. Presupuesto global (0004): unlimited → allow sin ledger entry ──
+      if (unlimited) {
+        return;
+      }
+      // Si tras el Policy Engine no hay presupuesto configurado → fail-safe.
+      if (maxWindowScaled === null || windowSeconds === null) {
+        throw new BudgetPolicyNotConfiguredError();
+      }
+
       // Mini-sweep inline: libera reservas zombis del propio agente antes de sumar.
       await this.storage.releaseExpiredForAgent(input.agentAddress, input.currency, now);
 
@@ -176,9 +257,59 @@ export class BridleGuard {
         status: 'reserved',
         windowStart: now,
         expiresAt: new Date(now.getTime() + ttlSeconds * 1000),
+        category,
       };
       await this.storage.insertReservation(entry);
     });
+  }
+
+  /**
+   * Lee el gasto acumulado de UNA categoría en su ventana. Fail-safe (feature 0006):
+   * si el adapter de Storage no implementa `sumActiveInWindowByCategory` pero hay una
+   * regla de categoría con límite de ventana, DENEGAMOS (nunca ignorar el límite en
+   * silencio) — se manifiesta como `PolicyInvalidError` vía el error tipado.
+   */
+  private sumCategorySpend(
+    agentAddress: string,
+    currency: string,
+    category: string,
+    windowFilterStart: Date,
+  ): Promise<bigint> {
+    if (!this.storage.sumActiveInWindowByCategory) {
+      throw new PolicyInvalidError(
+        'a category window limit is configured but the storage adapter does not ' +
+          'implement sumActiveInWindowByCategory; refusing to allow (fail-safe)',
+      );
+    }
+    return this.storage.sumActiveInWindowByCategory(
+      agentAddress,
+      currency,
+      category,
+      windowFilterStart,
+    );
+  }
+
+  /**
+   * Emite una decisión al sink de auditoría (allow y deny). NUNCA lanza: el sink es
+   * best-effort del host. Un allow legítimo se emite DENTRO del callback de
+   * `withAgentLock`, antes de `insertReservation`; si el sink lanzara y la excepción
+   * escapara, el adapter Postgres haría ROLLBACK y rechazaríamos un gasto que estaba
+   * dentro de presupuesto. Por eso la aislamos aquí (el hook de auditoría no puede
+   * romper el flujo de reserva ni el deny de política).
+   */
+  private emitAudit(input: ReserveInput, at: Date, decision: PolicyDecision): void {
+    try {
+      this.auditSink.record({
+        agentAddress: input.agentAddress,
+        currency: input.currency,
+        reservationId: input.reservationId,
+        decision,
+        at,
+      });
+    } catch {
+      // why: el sink es best-effort; un fallo de auditoría nunca debe convertir un
+      // allow en rechazo ni enmascarar el error de política de un deny. Se traga.
+    }
   }
 
   /** Convierte una reserva en gasto confirmado (`reserved`/`released` → `committed`). */

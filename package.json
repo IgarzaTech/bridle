@@ -1,8 +1,9 @@
 {
   "name": "@igarzatech/bridle",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Per-agent budget guardrail for agentic payments — el presupuesto que bloquea de verdad. Framework-agnostic, storage-pluggable, x402-ready.",
   "license": "Apache-2.0",
+  "author": "Erislandys Igarza (IgarzaTech)",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/IgarzaTech/bridle.git"

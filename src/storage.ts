@@ -1,4 +1,5 @@
 import type { AgentBudgetRecord, LedgerEntry, LedgerStatus } from './types';
+import type { PolicySet } from './policy/types';
 
 /**
  * `BridleStorage` — el contrato de persistencia de Bridle.
@@ -54,6 +55,29 @@ export interface BridleStorage {
     currency: string,
     windowFilterStart: Date,
   ): Promise<bigint>;
+
+  /**
+   * (feature 0006) Igual que `sumActiveInWindow` pero acotado a una `category`
+   * (case-insensitive). Necesario para los límites de gasto POR CATEGORÍA: cada
+   * categoría lleva su propio acumulado dentro de la ventana, independiente de las
+   * demás. OPCIONAL para retrocompatibilidad de adapters de terceros; si un adapter
+   * no lo implementa y hay una regla de categoría con límite de ventana, el guard
+   * DENIEGA (fail-safe — nunca ignora el límite en silencio).
+   */
+  sumActiveInWindowByCategory?(
+    agentAddress: string,
+    currency: string,
+    category: string,
+    windowFilterStart: Date,
+  ): Promise<bigint>;
+
+  /**
+   * (feature 0006) Lee el `PolicySet` del agente para una moneda, o null si no
+   * tiene. OPCIONAL: si el adapter no lo implementa, el guard usa el
+   * `config.defaultPolicySet` estático (o ninguno). La lectura ocurre dentro de la
+   * misma sección serializada de la reserva (herencia de la garantía de concurrencia).
+   */
+  getPolicySet?(agentAddress: string, currency: string): Promise<PolicySet | null>;
 
   /**
    * Inserta una reserva nueva (status `reserved`).
