@@ -1,7 +1,7 @@
 /**
  * payFn REAL para el demo en modo `tempo`: envía un `transferWithMemo` de pathUSD en
  * Tempo testnet (Moderato). Es código de EJEMPLO — muestra el patrón "envuelve TU pago
- * con Bridle". Es standalone (viem directo): un dev externo no tendría más infraestructura.
+ * con Bridle". NO reusa el TempoRail de NexoPay: un dev externo no lo tendría.
  *
  * Requiere por env: TEMPO_TEST_PRIVATE_KEY (signer fondeado), TEMPO_TEST_RECIPIENT.
  * RPC y chainId por defecto apuntan a Moderato.
