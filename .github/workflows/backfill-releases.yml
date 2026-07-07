@@ -1,0 +1,43 @@
+name: Backfill GitHub Releases
+
+# Crea las GitHub Releases que falten para los tags v* ya existentes, con las
+# notas del CHANGELOG.md. Idempotente: salta los tags que ya tienen release.
+# Manual (una sola pasada cubre v0.2.1, v0.2.2, v0.2.3). De ahí en adelante,
+# release.yml crea la release de cada tag nuevo automáticamente.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # necesitamos todos los tags
+
+      - name: Crea releases faltantes desde el CHANGELOG
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          created=0
+          for TAG in $(git tag -l 'v*' | sort -V); do
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "= $TAG ya tiene release; salto."
+              continue
+            fi
+            VERSION="${TAG#v}"
+            if node scripts/changelog-notes.mjs "$VERSION" > NOTES.md 2>/dev/null; then
+              echo "+ creando release $TAG"
+              gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+                --title "bridle $TAG" --notes-file NOTES.md --verify-tag
+              created=$((created + 1))
+            else
+              echo "! sin sección de CHANGELOG para $VERSION; salto."
+            fi
+          done
+          echo "Releases creadas: $created"

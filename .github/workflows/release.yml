@@ -102,3 +102,31 @@ jobs:
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Crea la GitHub Release del tag con las notas del CHANGELOG.md. Corre tras el
+  # publish para que la Release aparezca solo si la versión llegó a npm.
+  github_release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # requerido para crear releases
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Notas del CHANGELOG para este tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          node scripts/changelog-notes.mjs "$VERSION" > RELEASE_NOTES.md
+          echo "--- notas ---"; cat RELEASE_NOTES.md
+
+      - name: Crea la GitHub Release (idempotente)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "La release $TAG ya existe — no hago nada."
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "bridle $TAG" --notes-file RELEASE_NOTES.md --verify-tag
+          fi
