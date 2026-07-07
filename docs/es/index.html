@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bridle — el presupuesto que bloquea de verdad</title>
+  <meta name="description" content="Un guardrail de gasto para agentes de IA. Reserva el presupuesto antes de pagar, aguanta bajo concurrencia y falla cerrado — un agente no puede sobregirar, ni bajo carga. Open source, sin custodia, listo para x402.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Bridle — el presupuesto que bloquea de verdad">
+  <meta property="og:description" content="Guardrail de gasto para agentes de IA con garantía de concurrencia probada, motor de políticas y auditoría. Open source, sin custodia.">
+  <meta property="og:url" content="https://igarzatech.github.io/bridle/es/">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='88'%3E%F0%9F%94%92%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="../bridle.css">
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap navrow">
+    <a class="brand" href="#top">
+      <span class="mark">bri<b>d</b>le</span>
+      <span class="scope">@igarzatech/bridle</span>
+    </a>
+    <nav class="links">
+      <a href="#demo" class="hide-sm">Demo</a>
+      <a href="#how" class="hide-sm">Cómo funciona</a>
+      <a href="#start">Quickstart</a>
+      <a href="../">EN</a>
+      <a class="ghlink" href="https://github.com/IgarzaTech/bridle" target="_blank" rel="noopener">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <div class="wrap">
+
+    <section class="hero">
+      <span class="eyebrow">Guardrail de gasto para agentes de IA</span>
+      <h1>El presupuesto que<br>bloquea <span class="lock">de verdad.</span></h1>
+      <p class="lede">
+        Bridle se sienta delante de un pago: <b>reserva</b> el presupuesto antes de pagar,
+        <b>confirma</b> al liquidar y <b>libera</b> si falla. Aguanta bajo concurrencia real y falla
+        cerrado — un agente <b>no puede sobregirar, ni cuando veinte peticiones llegan en el mismo milisegundo.</b>
+      </p>
+      <div class="cta-row">
+        <span class="install"><span class="dollar">$</span> npm install @igarzatech/bridle <button id="copyBtn" aria-label="Copiar comando de instalación">copiar</button></span>
+        <a class="btn primary" href="#demo">Míralo bloquear ↓</a>
+        <a class="btn" href="https://www.npmjs.com/package/@igarzatech/bridle" target="_blank" rel="noopener">npm ↗</a>
+      </div>
+      <div class="badges">
+        <span><span class="dot"></span><b>Publicado con provenance de npm</b></span>
+        <span><b>Apache-2.0</b></span>
+        <span><b>Sin custodia</b></span>
+        <span><b>Node ≥ 20 · TypeScript</b></span>
+      </div>
+    </section>
+
+    <section class="demo" id="demo">
+      <div class="demo-head">
+        <div>
+          <span class="eyebrow">En vivo · el bug, y el fix</span>
+          <h2>Mira cómo aguanta el presupuesto</h2>
+          <p>Un agente, una ventana de $50, veinte pagos de $4 disparados a la vez. Cambia entre un
+             guardrail ingenuo y Bridle, y dispara.</p>
+        </div>
+      </div>
+
+      <div class="console">
+        <div class="console-bar">
+          <div class="toggle" role="group" aria-label="Modo del guardrail">
+            <button class="naive" data-mode="naive" aria-pressed="false">Guardrail ingenuo</button>
+            <button class="bridle" data-mode="bridle" aria-pressed="true">Bridle</button>
+          </div>
+          <button class="fire" id="fireBtn">▶ Disparar 20 pagos concurrentes</button>
+          <span class="bar-spec"><b>presupuesto</b> $50.00 &nbsp;·&nbsp; <b>tx</b> $4.00 &nbsp;·&nbsp; <b>concurrencia</b> 20</span>
+        </div>
+
+        <div class="console-body">
+          <div class="stage">
+            <div class="gauge-wrap">
+              <span class="gauge-label">Reservado en esta ventana</span>
+              <span class="gauge-num"><span class="spent" id="spent">$0.00</span> / $50.00</span>
+            </div>
+            <div class="gauge" id="gauge"><span class="limitline"></span><span class="fill" id="fill"></span></div>
+            <div class="gauge-foot"><span>$0</span><span id="overlabel">límite $50</span><span>$80</span></div>
+
+            <div class="verdict" id="verdict">
+              <span class="idle">Inactivo — elige un modo y dispara los pagos.</span>
+            </div>
+
+            <div class="grid-chips" id="chips"></div>
+          </div>
+
+          <aside class="ledger">
+            <h4>budget_ledger</h4>
+            <div class="ledger-rows" id="rows"><div class="empty">— sin reservas aún —</div></div>
+            <div class="ledger-note" id="lnote">El ingenuo lee el mismo saldo en cada petición paralela.
+              Bridle serializa por (agente, moneda) con un advisory lock de Postgres.</div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="how">
+      <span class="eyebrow">Por qué es difícil</span>
+      <h2>El fallo no es el límite. Es la concurrencia.</h2>
+      <p class="lead">
+        Un guardrail ingenuo comprueba <code>gastado + monto ≤ límite</code> y luego inserta. Dispara
+        veinte peticiones en paralelo y todas leen el mismo saldo restante, todas pasan, y el agente
+        sobregira — <b>mientras los unit tests siguen en verde,</b> porque un mock no tiene noción de
+        dos cosas pasando a la vez. No puedes hacer <code>SELECT sum(…) FOR UPDATE</code> sobre un
+        agregado, y los locks de fila no protegen a un agente nuevo con cero filas. Bridle bloquea la
+        <b>decisión</b>, no los datos — y trae la prueba.
+      </p>
+
+      <div class="features">
+        <div class="feat">
+          <span class="fnum">01</span>
+          <h3>Reserve → commit → release</h3>
+          <p>El presupuesto se reserva <em>antes</em> del pago y se confirma al liquidar. Las
+             decisiones ocurren antes de que se mueva el dinero, no se reconcilian después.</p>
+        </div>
+        <div class="feat">
+          <span class="fnum">02</span>
+          <h3>Garantía de concurrencia</h3>
+          <p>Serializado por (agente, moneda) con un advisory lock de Postgres — incluso sin fila de
+             ledger aún. Un test de ≥20 contra Postgres real <em>falla</em> el CI si no hay DB.</p>
+        </div>
+        <div class="feat">
+          <span class="fnum">03</span>
+          <h3>Motor de políticas declarativo</h3>
+          <p>Allow/deny lists de destinatarios, límites por categoría y ventanas temporales —
+             evaluados dentro del mismo lock, con precedencia determinista.</p>
+        </div>
+        <div class="feat">
+          <span class="fnum">04</span>
+          <h3>Decisiones auditables</h3>
+          <p>Cada allow y deny va a un sink de auditoría enchufable con un reason code. Best-effort y
+             aislado — un sink que falla nunca puede romper un pago válido.</p>
+        </div>
+        <div class="feat">
+          <span class="fnum">05</span>
+          <h3>Sin custodia, cross-rail</h3>
+          <p>Bridle nunca guarda llaves ni mueve fondos — solo cuenta y decide. Se sienta encima de
+             cualquier wallet, rail o facilitator x402 que traigas.</p>
+        </div>
+        <div class="feat">
+          <span class="fnum">06</span>
+          <h3>Falla cerrado, por diseño</h3>
+          <p>Sin política, contexto faltante, regla desconocida → deny con un error tipado. Un
+             guardrail que falla abierto no es un guardrail.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="start">
+      <span class="eyebrow">Quickstart</span>
+      <h2>Envuelve un pago. Obtén la garantía.</h2>
+      <p class="lead">Tú traes el pool de Postgres y la llamada de pago; Bridle decide. Fail-safe por
+         defecto — sin política ni presupuesto por defecto, deniega.</p>
+
+      <div class="code">
+        <div class="code-top"><span>▲</span><span class="fn">agent-spend.ts</span></div>
+<pre><span class="k">import</span> { BridleGuard } <span class="k">from</span> <span class="s">'@igarzatech/bridle'</span>;
+<span class="k">import</span> { PostgresStorageAdapter } <span class="k">from</span> <span class="s">'@igarzatech/bridle/postgres'</span>;
+<span class="k">import</span> { Pool } <span class="k">from</span> <span class="s">'pg'</span>;
+
+<span class="c">// Tú eres dueño del pool. Bridle no crea conexiones ni guarda fondos.</span>
+<span class="k">const</span> storage = <span class="k">new</span> <span class="f">PostgresStorageAdapter</span>(<span class="k">new</span> <span class="f">Pool</span>());
+<span class="k">await</span> storage.<span class="f">migrate</span>();
+
+<span class="k">const</span> guard = <span class="k">new</span> <span class="f">BridleGuard</span>({ storage, config: { defaultBudget } });
+
+<span class="c">// Reserva antes de pagar. Bajo concurrencia, pasa exactamente el presupuesto.</span>
+<span class="k">await</span> guard.<span class="f">checkAndReserve</span>({ agentAddress, currency: <span class="s">'USDC'</span>, amount: <span class="s">'4.00'</span>, reservationId });
+<span class="k">await</span> pay();                 <span class="c">// tu rail / facilitator x402</span>
+<span class="k">await</span> guard.<span class="f">commit</span>(reservationId);  <span class="c">// o .release() si falla</span></pre>
+      </div>
+    </section>
+
+    <section class="block" id="docs">
+      <span class="eyebrow">Profundiza</span>
+      <h2>Docs, código y la historia</h2>
+      <div class="doclinks">
+        <a class="doccard" href="https://github.com/IgarzaTech/bridle/blob/main/README.es.md" target="_blank" rel="noopener">
+          <span class="t">Documentación <span class="arrow">↗</span></span>
+          <span class="d">README completo — contrato de storage, motor de políticas, expiración, hook x402, decimales.</span>
+        </a>
+        <a class="doccard" href="https://dev.to/erislandys/the-budget-that-actually-blocks-the-concurrency-bug-an-ai-agents-spend-guardrail-cant-afford-29gj" target="_blank" rel="noopener">
+          <span class="t">El bug de concurrencia, a fondo <span class="arrow">↗</span></span>
+          <span class="d">El artículo (en inglés): la trampa, el fix con advisory lock, y el bug secuela donde el hook de auditoría mataba pagos válidos.</span>
+        </a>
+        <a class="doccard" href="https://www.npmjs.com/package/@igarzatech/bridle" target="_blank" rel="noopener">
+          <span class="t">Paquete npm <span class="arrow">↗</span></span>
+          <span class="d">Instalable, publicado con provenance. Core + subpaths /postgres + /x402.</span>
+        </a>
+        <a class="doccard" href="https://github.com/IgarzaTech/bridle/blob/main/CHANGELOG.md" target="_blank" rel="noopener">
+          <span class="t">Changelog <span class="arrow">↗</span></span>
+          <span class="d">Qué salió en cada release, de 0.1.0 hasta hoy.</span>
+        </a>
+      </div>
+    </section>
+  </div>
+
+  <footer class="site">
+    <div class="wrap footrow">
+      <div>
+        <div class="fbrand">bri<b>d</b>le</div>
+        <div class="fmeta">Apache-2.0 · hecho por IgarzaTech · sin custodia</div>
+      </div>
+      <nav>
+        <a href="../">English</a>
+        <a href="https://github.com/IgarzaTech/bridle" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://www.npmjs.com/package/@igarzatech/bridle" target="_blank" rel="noopener">npm</a>
+        <a href="#demo">Demo</a>
+      </nav>
+    </div>
+  </footer>
+</main>
+
+<script>
+(function () {
+  var BUDGET = 50, TX = 4, N = 20, SCALE = 80;
+  var mode = 'bridle', running = false;
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var els = {
+    fire: document.getElementById('fireBtn'), spent: document.getElementById('spent'),
+    fill: document.getElementById('fill'), gauge: document.getElementById('gauge'),
+    verdict: document.getElementById('verdict'), chips: document.getElementById('chips'),
+    rows: document.getElementById('rows'),
+    toggles: Array.prototype.slice.call(document.querySelectorAll('.toggle button'))
+  };
+  for (var i = 0; i < N; i++) {
+    var c = document.createElement('div');
+    c.className = 'chip'; c.id = 'chip' + i;
+    c.innerHTML = '<span>#' + (i + 1) + '</span><span class="amt">$4</span>';
+    els.chips.appendChild(c);
+  }
+  function money(n) { return '$' + n.toFixed(2); }
+  function reset() {
+    els.spent.textContent = '$0.00'; els.fill.style.width = '0%';
+    els.gauge.classList.remove('over');
+    els.rows.innerHTML = '<div class="empty">— sin reservas aún —</div>';
+    els.verdict.className = 'verdict';
+    els.verdict.innerHTML = '<span class="idle">Inactivo — elige un modo y dispara los pagos.</span>';
+    for (var i = 0; i < N; i++) { var c = document.getElementById('chip' + i); c.className = 'chip'; c.querySelector('.amt').textContent = '$4'; }
+  }
+  els.toggles.forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (running) return;
+      mode = b.getAttribute('data-mode');
+      els.toggles.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+      reset();
+    });
+  });
+  document.getElementById('copyBtn').addEventListener('click', function () {
+    var t = this;
+    navigator.clipboard && navigator.clipboard.writeText('npm install @igarzatech/bridle').then(function () {
+      t.textContent = 'copiado'; setTimeout(function () { t.textContent = 'copiar'; }, 1400);
+    });
+  });
+  function decisions() {
+    var res = [];
+    if (mode === 'naive') { for (var i = 0; i < N; i++) res.push(true); }
+    else { var spent = 0; for (var j = 0; j < N; j++) { if (spent + TX <= BUDGET) { res.push(true); spent += TX; } else res.push(false); } }
+    return res;
+  }
+  function play() {
+    if (running) return;
+    running = true; els.fire.disabled = true; reset(); els.rows.innerHTML = '';
+    var res = decisions(), spent = 0, allowed = 0, denied = 0, k = 0;
+    var step = reduce ? 0 : 70;
+    function tick() {
+      if (k >= N) return finish();
+      var ok = res[k], chip = document.getElementById('chip' + k);
+      chip.className = 'chip ' + (ok ? 'allow' : 'deny') + (reduce ? '' : ' pop');
+      chip.querySelector('.amt').textContent = ok ? '$4 ✓' : '$4 ✕';
+      if (ok) { spent += TX; allowed++; } else denied++;
+      els.spent.textContent = money(spent);
+      els.fill.style.width = Math.min(spent / SCALE * 100, 100) + '%';
+      if (spent > BUDGET) els.gauge.classList.add('over');
+      var row = document.createElement('div'); row.className = 'lrow';
+      row.innerHTML = '<span>req #' + (k + 1) + ' · $4.00</span><span class="st ' + (ok ? 'allow">reservado' : 'deny">denegado') + '</span>';
+      els.rows.appendChild(row); els.rows.scrollTop = els.rows.scrollHeight;
+      k++; setTimeout(tick, step);
+    }
+    function finish() {
+      var over = spent > BUDGET;
+      els.verdict.className = 'verdict ' + (over ? 'over' : 'hold');
+      if (over) {
+        els.verdict.innerHTML = '<span class="tag">SOBREGIRO · ' + money(spent) + '</span><p>' + allowed +
+          ' pagos pasaron sobre un presupuesto de $50. Cada petición paralela leyó el mismo saldo de $0 y pasó — ' +
+          'el guardrail reportó éxito ' + allowed + ' veces mientras el agente gastaba ' + money(spent) +
+          '. Este es el bug que los unit tests nunca atrapan.</p>';
+      } else {
+        els.verdict.innerHTML = '<span class="tag">PRESUPUESTO AGUANTÓ · ' + money(spent) + ' / $50.00</span><p>Exactamente ' +
+          allowed + ' reservas pasaron y ' + denied + ' se denegaron. Lo reservado nunca supera el límite, ' +
+          'porque el advisory lock serializó cada petición concurrente — incluida la primera, sin fila de ledger que bloquear.</p>';
+      }
+      running = false; els.fire.disabled = false;
+    }
+    tick();
+  }
+  els.fire.addEventListener('click', play);
+})();
+</script>
+</body>
+</html>
