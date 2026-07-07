@@ -3,6 +3,12 @@
 All notable changes to `@igarzatech/bridle` are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/); versioning follows [SemVer](https://semver.org/).
 
+## [0.2.3] — 2026-07-07
+
+### Changed
+- Documentation and npm metadata only (no API changes): expanded README with positioning and
+  badges, and broadened npm keywords/description for discoverability.
+
 ## [0.2.2] — 2026-07-07
 
 ### Changed
@@ -51,6 +57,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/); versioning foll
   default secp256k1 (EIP-191) implementation.
 - x402 hook (`/x402`) — framework-agnostic `withBudget(payFn)` + Express error handler.
 
+[0.2.3]: https://github.com/IgarzaTech/bridle/releases/tag/v0.2.3
 [0.2.2]: https://github.com/IgarzaTech/bridle/releases/tag/v0.2.2
 [0.2.1]: https://github.com/IgarzaTech/bridle/releases/tag/v0.2.1
 [0.2.0]: https://github.com/IgarzaTech/bridle/releases/tag/v0.2.0
