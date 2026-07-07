@@ -1,0 +1,58 @@
+name: Sync demo bundle
+
+# Mantiene el demo de la web usando el paquete REAL: regenera
+# docs/vendor/bridle.min.js y el badge de versión a partir de lo publicado en npm.
+#
+# Disparadores:
+#   - workflow_run: instantáneo al terminar "Release" (usa la latest de npm)
+#   - schedule: auto-cura cualquier drift a diario (por si algo se publicó a mano)
+#   - workflow_dispatch: manual, versión a elección
+#
+# Commitea a main solo si hubo cambios (idempotente). GITHUB_TOKEN no re-dispara
+# workflows, así que el commit "chore" no genera bucles.
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versión npm a vendorizar (default: latest)'
+        required: false
+        default: 'latest'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    # En workflow_run, solo si Release terminó OK (evita vendorizar un release roto).
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Regenera el bundle + sincroniza el badge
+        run: node scripts/build-demo-bundle.mjs "${{ github.event.inputs.version || 'latest' }}"
+
+      - name: Commit a main si hubo cambios
+        run: |
+          if [ -n "$(git status --porcelain docs/)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add docs/vendor/bridle.min.js docs/index.html docs/es/index.html
+            git commit -m "chore(site): sync del demo al paquete real publicado [skip ci]"
+            git push origin main
+            echo "Bundle del demo actualizado."
+          else
+            echo "Sin cambios — el demo ya está al día."
+          fi
