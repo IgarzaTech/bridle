@@ -1,7 +1,7 @@
 {
   "name": "@igarzatech/bridle",
-  "version": "0.2.2",
-  "description": "Per-agent budget guardrail for agentic payments — el presupuesto que bloquea de verdad. Framework-agnostic, storage-pluggable, x402-ready.",
+  "version": "0.2.3",
+  "description": "The budget that actually blocks — per-agent spend guardrail for AI agents & agentic payments. Reserve/commit/release with a proven concurrency guarantee, policy engine, and audit trail. Framework-agnostic, storage-pluggable, x402-ready.",
   "license": "Apache-2.0",
   "author": "Erislandys Igarza (IgarzaTech)",
   "repository": {
@@ -14,11 +14,19 @@
   "homepage": "https://github.com/IgarzaTech/bridle#readme",
   "keywords": [
     "agentic-payments",
+    "agentic-commerce",
+    "ai-agents",
+    "llm",
     "budget",
+    "budget-enforcement",
+    "spend-control",
     "guardrail",
+    "guardrails",
     "x402",
-    "rate-limit",
-    "spend-control"
+    "stablecoins",
+    "concurrency",
+    "audit",
+    "fintech"
   ],
   "engines": {
     "node": ">=20"
