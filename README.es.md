@@ -1,20 +1,58 @@
 [English](./README.md) | **Español**
 
-[![CI](https://github.com/IgarzaTech/bridle/actions/workflows/ci.yml/badge.svg)](https://github.com/IgarzaTech/bridle/actions/workflows/ci.yml)
-
 # @igarzatech/bridle
+
+[![npm version](https://img.shields.io/npm/v/@igarzatech/bridle.svg?logo=npm)](https://www.npmjs.com/package/@igarzatech/bridle)
+[![npm provenance](https://img.shields.io/badge/npm-provenance-blueviolet?logo=npm)](https://www.npmjs.com/package/@igarzatech/bridle#provenance)
+[![CI](https://github.com/IgarzaTech/bridle/actions/workflows/ci.yml/badge.svg)](https://github.com/IgarzaTech/bridle/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
+[![node >=20](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg?logo=node.js)](https://nodejs.org)
+[![types included](https://img.shields.io/badge/types-included-blue.svg?logo=typescript)](./dist/index.d.ts)
 
 **El presupuesto que bloquea de verdad.** Guardrail de gasto por agente para pagos
 agénticos — framework-agnóstico, storage-pluggable, listo para x402.
 
 Bridle se sienta delante de un intento de pago: **reserva** el presupuesto antes de
 pagar, **confirma** al liquidar y **libera** si el pago falla o expira. Bajo
-concurrencia real, garantiza que un agente nunca se pase de su límite (validado con un
-test de concurrencia contra Postgres real que corre en CI).
+concurrencia real, garantiza que un agente nunca se pase de su límite — validado con un
+test de concurrencia contra **Postgres real** que corre en CI.
 
-- Licencia: **Apache-2.0**
-- Node: **20.x**
-- Sin custodia, sin mover fondos: Bridle solo cuenta y decide.
+```bash
+npm install @igarzatech/bridle
+```
+
+---
+
+## ¿Por qué Bridle?
+
+Los agentes que gastan dinero se rompen de una forma concreta: **sobregiran bajo
+concurrencia**, y el guardrail que debía frenarlos deja pasar la plata *en silencio*. La
+mayoría de las herramientas de "gasto de IA" son **observabilidad** — te dicen qué gastó un
+agente *después* de gastarlo, o limitan uso por API key sin un modelo de contabilidad por
+tarea. Eso es un dashboard, no un freno.
+
+Bridle es el freno. Lo que lo hace distinto — y que nadie más combina:
+
+- **Reserva pre-ejecución, no tracking post-hoc.** El presupuesto se *reserva antes* del pago
+  (`reserve` → `commit`/`release`); una petición se deniega *antes* de mover el dinero, no se
+  reconcilia después.
+- **Garantía de concurrencia probada.** Lo difícil no es el límite — es que N peticiones
+  concurrentes del mismo agente no lean todas el mismo saldo y pasen todas. Bridle serializa
+  por `(agente, moneda)` con un advisory lock de Postgres, y trae un test que dispara ≥20
+  reservas concurrentes contra **Postgres real** y afirma que gana exactamente una. Este bug
+  es invisible a los unit tests con mocks; la garantía viaja con el adapter.
+- **Decisiones auditables.** Cada allow/deny va a un sink de auditoría enchufable con un
+  reason code — la evidencia que piden compliance y el due diligence.
+- **Fail-closed por diseño.** Sin política ni default → **deny**. Falta contexto que una
+  política necesita → **deny**. Un guardrail que falla abierto no es un guardrail.
+- **Cross-rail, sin custodia.** Bridle nunca mueve fondos ni guarda llaves — solo cuenta y
+  decide. Se sienta *encima* de cualquier wallet, rail o facilitator `x402` que traigas.
+
+Si solo necesitas "dime qué gastaron mis agentes", no necesitas Bridle. Si necesitas
+"garantizar que este agente no puede pasarse de su presupuesto, ni bajo carga, con un rastro
+de auditoría" — eso es exactamente esto.
+
+- Licencia: **Apache-2.0** · Node: **>=20** · Sin custodia · TypeScript-first (tipos incluidos).
 
 ---
 
