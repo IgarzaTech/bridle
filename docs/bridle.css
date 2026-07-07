@@ -69,24 +69,59 @@
   @media (max-width: 680px) { nav.links a.hide-sm { display: none; } }
 
   /* ---------- hero ---------- */
-  .hero { padding: 74px 0 34px; }
+  .hero {
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 56px;
+    align-items: center;
+    padding: 78px 0 48px;
+  }
+  @media (max-width: 900px) { .hero { grid-template-columns: 1fr; gap: 42px; padding: 56px 0 30px; } }
+  .hero-copy { min-width: 0; }
   .hero h1 {
     font-family: var(--mono);
     font-weight: 700;
-    font-size: clamp(38px, 6.2vw, 68px);
-    line-height: 1.02;
+    font-size: clamp(38px, 5.2vw, 58px);
+    line-height: 1.03;
     letter-spacing: -.025em;
     margin: 16px 0 0;
     text-wrap: balance;
   }
   .hero h1 .lock { color: var(--brass); }
   .hero .lede {
-    max-width: 62ch;
-    font-size: clamp(16px, 2.1vw, 19px);
+    max-width: 52ch;
+    font-size: clamp(16px, 2.1vw, 18px);
     color: var(--muted);
     margin: 22px 0 0;
   }
   .hero .lede b { color: var(--text); font-weight: 600; }
+
+  /* hero receipt card */
+  .hero-visual { min-width: 0; }
+  @media (max-width: 900px) { .hero-visual { max-width: 440px; } }
+  .receipt {
+    border: 1px solid var(--line); border-radius: 15px; overflow: hidden;
+    background: var(--ink-2); box-shadow: 0 34px 80px -46px rgba(0,0,0,.95);
+    font-family: var(--mono);
+  }
+  .receipt .r-top {
+    display: flex; align-items: center; gap: 9px; padding: 13px 16px;
+    border-bottom: 1px solid var(--line-soft); background: var(--panel);
+    font-size: 11.5px; color: var(--muted); letter-spacing: .01em;
+  }
+  .receipt .r-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--allow); box-shadow: 0 0 9px var(--allow); flex: none; }
+  .receipt .r-body { padding: 18px 16px 8px; display: flex; flex-direction: column; gap: 11px; }
+  .r-line { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .r-line .n { display: inline-block; min-width: 30px; color: var(--muted-2); }
+  .r-line .v { font-weight: 700; letter-spacing: .03em; }
+  .r-line.allow .v { color: var(--allow); }
+  .r-line.deny .v { color: var(--deny); }
+  .receipt .r-foot { padding: 6px 16px 18px; }
+  .r-gauge { height: 10px; margin-top: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .r-gauge span { display: block; height: 100%; width: 96%; background: var(--allow); border-radius: 6px 0 0 6px; }
+  .r-sum { display: flex; justify-content: space-between; align-items: baseline; margin-top: 13px; font-size: 13px; color: var(--muted); }
+  .r-sum b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .r-tag { margin-top: 14px; display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .06em; padding: 4px 10px; border-radius: 6px; background: var(--allow-bg); color: var(--allow); }
 
   .cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 30px; }
   .install {
