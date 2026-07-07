@@ -8,9 +8,12 @@
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![node >=20](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg?logo=node.js)](https://nodejs.org)
 [![types included](https://img.shields.io/badge/types-included-blue.svg?logo=typescript)](./dist/index.d.ts)
+[![demo en vivo](https://img.shields.io/badge/demo-en%20vivo-46C48C?logo=githubpages&logoColor=white)](https://igarzatech.github.io/bridle/es/)
 
 **El presupuesto que bloquea de verdad.** Guardrail de gasto por agente para pagos
 agénticos — framework-agnóstico, storage-pluggable, listo para x402.
+
+**▶ Demo en vivo y docs:** **[igarzatech.github.io/bridle](https://igarzatech.github.io/bridle/es/)** — mira cómo aguanta el presupuesto con 20 pagos concurrentes, corriendo el paquete real en tu navegador.
 
 Bridle se sienta delante de un intento de pago: **reserva** el presupuesto antes de
 pagar, **confirma** al liquidar y **libera** si el pago falla o expira. Bajo

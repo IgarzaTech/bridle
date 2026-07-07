@@ -8,9 +8,12 @@
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![node >=20](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg?logo=node.js)](https://nodejs.org)
 [![types included](https://img.shields.io/badge/types-included-blue.svg?logo=typescript)](./dist/index.d.ts)
+[![live demo](https://img.shields.io/badge/demo-live-46C48C?logo=githubpages&logoColor=white)](https://igarzatech.github.io/bridle/)
 
 **The budget that actually blocks.** Per-agent spend guardrail for agentic payments —
 framework-agnostic, storage-pluggable, x402-ready.
+
+**▶ Live demo & docs:** **[igarzatech.github.io/bridle](https://igarzatech.github.io/bridle/)** — watch the budget hold under 20 concurrent payments, running the real package in your browser.
 
 Bridle sits in front of a payment attempt: it **reserves** the budget before paying,
 **commits** on settlement, and **releases** if the payment fails or expires. Under real
