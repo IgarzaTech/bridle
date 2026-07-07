@@ -76,6 +76,7 @@
             <button class="bridle" data-mode="bridle" aria-pressed="true">Bridle</button>
           </div>
           <button class="fire" id="fireBtn">▶ Fire 20 concurrent payments</button>
+          <span class="engine" id="engine" data-state="load">● loading @igarzatech/bridle…</span>
           <span class="bar-spec"><b>budget</b> $50.00 &nbsp;·&nbsp; <b>tx</b> $4.00 &nbsp;·&nbsp; <b>concurrency</b> 20</span>
         </div>
 
@@ -98,8 +99,9 @@
           <aside class="ledger">
             <h4>budget_ledger</h4>
             <div class="ledger-rows" id="rows"><div class="empty">— no reservations yet —</div></div>
-            <div class="ledger-note" id="lnote">Naïve reads the same balance on every parallel request.
-              Bridle serializes per (agent, currency) with a Postgres advisory lock.</div>
+            <div class="ledger-note" id="lnote">This demo runs the real <b>@igarzatech/bridle</b> in your browser
+              (core + InMemoryStorage). Naïve skips the lock and races; Bridle serializes per (agent, currency).
+              In production the Postgres adapter provides the cross-process guarantee with an advisory lock.</div>
           </aside>
         </div>
       </div>
@@ -227,11 +229,12 @@
   var BUDGET = 50, TX = 4, N = 20, SCALE = 80;
   var mode = 'bridle', running = false;
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var AGENT = '0xBr1dleDemoAgent000000000000000000000000', CUR = 'USDC';
   var els = {
     fire: document.getElementById('fireBtn'), spent: document.getElementById('spent'),
     fill: document.getElementById('fill'), gauge: document.getElementById('gauge'),
     verdict: document.getElementById('verdict'), chips: document.getElementById('chips'),
-    rows: document.getElementById('rows'),
+    rows: document.getElementById('rows'), engine: document.getElementById('engine'),
     toggles: Array.prototype.slice.call(document.querySelectorAll('.toggle button'))
   };
   for (var i = 0; i < N; i++) {
@@ -241,6 +244,58 @@
     els.chips.appendChild(c);
   }
   function money(n) { return '$' + n.toFixed(2); }
+  function range(n) { var a = []; for (var i = 0; i < n; i++) a.push(i); return a; }
+
+  // ── Load the REAL published package (self-hosted bundle) ──────────────
+  // The demo runs @igarzatech/bridle in the browser: BridleGuard + InMemoryStorage,
+  // whose withAgentLock is a real in-process mutex. Falls back to a simulation
+  // (same outcome) only if the module cannot load.
+  var real = null;
+  function setEngine(state) {
+    if (!els.engine) return;
+    els.engine.setAttribute('data-state', state);
+    els.engine.textContent = state === 'real' ? '● running @igarzatech/bridle@0.2.3'
+      : state === 'sim' ? '● simulation (package offline)'
+      : '● loading @igarzatech/bridle…';
+  }
+  setEngine('load');
+  import('./vendor/bridle.min.js').then(function (mod) {
+    if (mod && mod.BridleGuard && mod.InMemoryStorage) { real = mod; setEngine('real'); }
+    else setEngine('sim');
+  }).catch(function () { setEngine('sim'); });
+
+  // Decisions computed by the ACTUAL package code.
+  function realDecisions(m) {
+    if (m === 'bridle') {
+      var storage = new real.InMemoryStorage();
+      var guard = new real.BridleGuard({ storage: storage, config: { defaultBudget: { maxAmountPerWindow: '50.00', windowDurationSeconds: 3600 } } });
+      return Promise.all(range(N).map(function (i) {
+        return guard.checkAndReserve({ reservationId: 'b' + i, agentAddress: AGENT, amount: '4.00', currency: CUR })
+          .then(function () { return true; }, function () { return false; });
+      }));
+    }
+    // Naïve: same real storage, but WITHOUT the lock → the concurrency race.
+    var st = new real.InMemoryStorage(), S = 1000000n, amt = BigInt(TX) * S, lim = BigInt(BUDGET) * S;
+    return Promise.all(range(N).map(function (i) {
+      return (async function () {
+        var now = new Date();
+        var sum = await st.sumActiveInWindow(AGENT, CUR, new Date(now.getTime() - 3600e3));
+        if (sum + amt <= lim) {
+          await st.insertReservation({ reservationId: 'n' + i, agentAddress: AGENT, currency: CUR, amountScaled: amt, status: 'reserved', windowStart: now, expiresAt: new Date(now.getTime() + 3600e3) });
+          return true;
+        }
+        return false;
+      })();
+    }));
+  }
+
+  // Fallback simulation — identical outcome, used only if the module fails to load.
+  function simDecisions() {
+    var res = [];
+    if (mode === 'naive') { for (var i = 0; i < N; i++) res.push(true); }
+    else { var spent = 0; for (var j = 0; j < N; j++) { if (spent + TX <= BUDGET) { res.push(true); spent += TX; } else res.push(false); } }
+    return res;
+  }
   function reset() {
     els.spent.textContent = '$0.00'; els.fill.style.width = '0%';
     els.gauge.classList.remove('over');
@@ -263,16 +318,13 @@
       t.textContent = 'copied'; setTimeout(function () { t.textContent = 'copy'; }, 1400);
     });
   });
-  function decisions() {
-    var res = [];
-    if (mode === 'naive') { for (var i = 0; i < N; i++) res.push(true); }
-    else { var spent = 0; for (var j = 0; j < N; j++) { if (spent + TX <= BUDGET) { res.push(true); spent += TX; } else res.push(false); } }
-    return res;
-  }
-  function play() {
+  async function play() {
     if (running) return;
     running = true; els.fire.disabled = true; reset(); els.rows.innerHTML = '';
-    var res = decisions(), spent = 0, allowed = 0, denied = 0, k = 0;
+    var res;
+    try { res = real ? await realDecisions(mode) : simDecisions(); }
+    catch (e) { res = simDecisions(); }
+    var spent = 0, allowed = 0, denied = 0, k = 0;
     var step = reduce ? 0 : 70;
     function tick() {
       if (k >= N) return finish();
